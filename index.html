@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>切奶龙司凤版</title>
-  <meta http-equiv="refresh" content="0; url=./切奶龙司凤版.html">
   <style>
     html, body { height: 100%; margin: 0; background: #04090c; }
     body {
@@ -16,8 +15,17 @@
     }
     a { color: #6fffe4; }
   </style>
+  <script>
+    // 手机/平板进手机版，桌面进标准版
+    (function(){
+      var coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+      var small = Math.min(screen.width, screen.height) <= 820;
+      var url = (coarse && small) ? './mobile.html' : './切奶龙司凤版.html';
+      location.replace(url);
+    })();
+  </script>
 </head>
 <body>
-  <p>正在进入「切奶龙司凤版」… <a href="./切奶龙司凤版.html">点此开始</a></p>
+  <p>正在进入「切奶龙司凤版」… <a href="./切奶龙司凤版.html">标准版</a> · <a href="./mobile.html">手机版</a></p>
 </body>
 </html>

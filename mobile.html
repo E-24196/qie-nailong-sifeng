@@ -1,0 +1,2560 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>切奶龙司凤版 · 手机版</title>
+  <style>
+    :root{
+      --bg:#000;
+      --hud: rgba(180, 240, 255, .92);
+      --hud2: rgba(180, 240, 255, .55);
+      --line: rgba(180, 240, 255, .18);
+      --grid: rgba(180, 240, 255, .08);
+      --ok: rgba(110, 255, 220, .95);
+      --warn: rgba(255, 200, 120, .95);
+      --bad: rgba(255, 120, 120, .95);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      overflow: hidden;
+      color: white;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    #stage { position: fixed; inset: 0; background: #000; }
+    canvas#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+    /* ===== HUD ===== */
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      font-family: var(--mono);
+      color: var(--hud);
+      mix-blend-mode: screen;
+    }
+    #hud .frame {
+      position: absolute;
+      inset: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,.35) inset, 0 0 22px rgba(110,255,220,.06);
+    }
+    #hud .grid {
+      position: absolute;
+      inset: 16px;
+      border-radius: 16px;
+      background:
+        linear-gradient(to right, var(--grid) 1px, transparent 1px) 0 0 / 40px 40px,
+        linear-gradient(to bottom, var(--grid) 1px, transparent 1px) 0 0 / 40px 40px;
+      opacity: .55;
+      mask-image: radial-gradient(circle at 50% 45%, rgba(0,0,0,1) 0%, rgba(0,0,0,.95) 40%, rgba(0,0,0,.2) 75%, rgba(0,0,0,0) 100%);
+    }
+    .corner { position: absolute; width: 34px; height: 34px; border: 2px solid var(--line); }
+    .tl { left: 16px; top: 16px; border-right: 0; border-bottom: 0; border-top-left-radius: 16px; }
+    .tr { right: 16px; top: 16px; border-left: 0; border-bottom: 0; border-top-right-radius: 16px; }
+    .bl { left: 16px; bottom: 16px; border-right: 0; border-top: 0; border-bottom-left-radius: 16px; }
+    .br { right: 16px; bottom: 16px; border-left: 0; border-top: 0; border-bottom-right-radius: 16px; }
+
+    #scanlines {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      background:
+        repeating-linear-gradient(
+          to bottom,
+          rgba(180,240,255,.08),
+          rgba(180,240,255,.08) 1px,
+          rgba(0,0,0,0) 5px,
+          rgba(0,0,0,0) 10px
+        );
+      mix-blend-mode: screen;
+      animation: scanMove 2.2s linear infinite;
+      transition: opacity .18s ease;
+    }
+    @keyframes scanMove{ 0%{ transform: translateY(-12%);} 100%{ transform: translateY(12%);} }
+    #hud.tracking #scanlines { opacity: .22; }
+
+    #status {
+      position: absolute;
+      left: 30px;
+      top: 28px;
+      display: grid;
+      gap: 10px;
+      max-width: min(720px, calc(100vw - 60px));
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(180,240,255,.18);
+      background: rgba(6, 16, 22, .38);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 0 18px rgba(110,255,220,.05);
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: rgba(180,240,255,.92);
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 999px;
+      background: var(--warn);
+      box-shadow: 0 0 12px rgba(255,200,120,.35);
+    }
+    .dot.ok { background: var(--ok); box-shadow: 0 0 14px rgba(110,255,220,.38); }
+    .dot.bad{ background: var(--bad); box-shadow: 0 0 14px rgba(255,120,120,.38); }
+
+    #readouts {
+      display: grid;
+      gap: 6px;
+      font-size: 11px;
+      color: rgba(180,240,255,.65);
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+    #readouts b { color: rgba(180,240,255,.92); font-weight: 700; }
+
+    #scoreboard {
+      position: absolute;
+      right: 30px;
+      top: 28px;
+      display: grid;
+      gap: 10px;
+      text-align: right;
+    }
+    #scoreboard .big {
+      font-size: 14px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.92);
+    }
+    #scoreboard .big span {
+      color: rgba(110,255,220,.95);
+      text-shadow: 0 0 14px rgba(110,255,220,.25);
+    }
+    #scoreboard .small {
+      font-size: 11px;
+      color: rgba(180,240,255,.62);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    /* camera frame */
+    #camWrap {
+      position: absolute;
+      right: 26px;
+      bottom: 26px;
+      width: 260px;
+      aspect-ratio: 4 / 3;
+      border-radius: 16px;
+      border: 1px solid rgba(180,240,255,.18);
+      box-shadow: 0 0 28px rgba(110,255,220,.08);
+      overflow: hidden;
+      background: rgba(0,0,0,.55);
+      pointer-events: none;
+    }
+    #camWrap .label, #camWrap .blade {
+      position: absolute;
+      top: 10px;
+      font-size: 10px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(180,240,255,.14);
+      padding: 6px 8px;
+      border-radius: 999px;
+      z-index: 3;
+    }
+    #camWrap .label { left: 10px; color: rgba(180,240,255,.82); }
+    #camWrap .blade { right: 10px; color: rgba(255,255,255,.85); }
+    video#cam {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+      opacity: .92;
+    }
+    canvas#camOverlay {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+    #camWrap .scan {
+      position: absolute;
+      inset: -30% -10%;
+      opacity: 0;
+      background: linear-gradient(to bottom, transparent, rgba(110,255,220,.14), transparent);
+      transform: translateY(-120%);
+      z-index: 1;
+    }
+    #hud.tracking #camWrap .scan{
+      opacity: .75;
+      animation: camSweep 1.35s linear infinite;
+    }
+    @keyframes camSweep { 0%{ transform: translateY(-120%);} 100%{ transform: translateY(200%);} }
+
+    /* start overlay */
+    #overlay {
+      position: fixed; inset: 0;
+      display: grid; place-items: center;
+      pointer-events: auto;
+      background: radial-gradient(circle at 50% 40%, rgba(110,255,220,.10), rgba(0,0,0,.92) 55%, rgba(0,0,0,1) 100%);
+    }
+    #card {
+      width: min(760px, calc(100vw - 40px));
+      border-radius: 18px;
+      border: 1px solid rgba(180,240,255,.18);
+      background: rgba(0,0,0,.48);
+      box-shadow: 0 0 48px rgba(110,255,220,.08);
+      padding: 18px 18px 16px;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      font-family: var(--sans);
+      color: rgba(255,255,255,.90);
+    }
+    #card h1{ margin: 0 0 10px; font-size: 20px; font-weight: 700; }
+    #card p{ margin: 8px 0; font-size: 13px; line-height: 1.5; color: rgba(255,255,255,.72); }
+    #card .row{ display:flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; align-items: center; justify-content: space-between; }
+    #startBtn{
+      pointer-events: auto;
+      cursor: pointer;
+      border: 1px solid rgba(110,255,220,.35);
+      background: rgba(110,255,220,.10);
+      color: rgba(255,255,255,.92);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      box-shadow: 0 0 24px rgba(110,255,220,.10);
+      transition: transform .15s ease, background .15s ease;
+    }
+    #startBtn:hover{ transform: translateY(-1px); background: rgba(110,255,220,.14); }
+    #startBtn:active{ transform: translateY(0px); }
+    #note { font-family: var(--mono); font-size: 11px; color: rgba(180,240,255,.65); letter-spacing: .05em; }
+    #note code{
+      color: rgba(180,240,255,.90);
+      background: rgba(180,240,255,.08);
+      border: 1px solid rgba(180,240,255,.10);
+      padding: 1px 6px;
+      border-radius: 10px;
+    }
+    #banner {
+      margin-top: 10px;
+      display: none;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(255,255,255,.86);
+      border: 1px solid rgba(255,200,120,.25);
+      background: rgba(40, 20, 0, .35);
+      padding: 10px 12px;
+      border-radius: 14px;
+    }
+    #banner strong{ color: rgba(255,200,120,.95); }
+
+    /* hit flash */
+    #flash {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      background: radial-gradient(circle at 50% 45%, rgba(255,255,255,.22), rgba(110,255,220,.09) 18%, rgba(0,0,0,0) 52%);
+      transition: opacity .10s ease;
+      mix-blend-mode: screen;
+    }
+    #flash.on { opacity: 1; }
+
+    /* game over */
+    #gameOver {
+      position: fixed; inset: 0;
+      display: none; place-items: center;
+      pointer-events: auto;
+      background: radial-gradient(circle at 50% 40%, rgba(255,120,120,.10), rgba(0,0,0,.92) 60%, rgba(0,0,0,1) 100%);
+      font-family: var(--sans);
+    }
+    #gameOver .box{
+      width: min(560px, calc(100vw - 40px));
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.50);
+      box-shadow: 0 0 42px rgba(255,120,120,.10);
+      padding: 18px 18px 16px;
+      color: rgba(255,255,255,.90);
+    }
+    #gameOver .box h2{ margin: 0 0 10px; }
+    #restartBtn{
+      margin-top: 12px;
+      cursor:pointer;
+      border: 1px solid rgba(180,240,255,.18);
+      background: rgba(180,240,255,.08);
+      color: rgba(255,255,255,.92);
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    /* 返回模式选择：游戏进行中才显示 */
+    #homeBtn {
+      position: absolute;
+      left: 30px;
+      bottom: 28px;
+      z-index: 40;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(180,240,255,.22);
+      background: rgba(6, 16, 22, .62);
+      color: rgba(180,240,255,.92);
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-decoration: none;
+      cursor: pointer;
+      box-shadow: 0 0 18px rgba(110,255,220,.06);
+      transition: background .15s ease, border-color .15s ease, transform .15s ease;
+    }
+    #homeBtn.show { display: inline-flex; }
+    #homeBtn:hover {
+      background: rgba(110,255,220,.14);
+      border-color: rgba(110,255,220,.45);
+      transform: translateY(-1px);
+    }
+    #homeBtn:active { transform: translateY(0); }
+
+    @media (max-width: 720px){
+      #camWrap{ width: 200px; right: 18px; bottom: 18px; }
+      #status{ left: 20px; top: 20px; }
+      #scoreboard{ right: 20px; top: 20px; }
+      #homeBtn{ left: 18px; bottom: 18px; }
+    }
+
+    /* ---------- 手机版专化：触控 + 安全区 + 省 GPU ---------- */
+    html, body{
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #scanlines{ display: none; }              /* 全屏扫描线在手机上很吃合成性能 */
+    #card{
+      width: min(520px, calc(100vw - 20px));
+      padding: 16px 14px 14px;
+      border-radius: 16px;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    #card h1{ font-size: 24px; }
+    #mobileHint{
+      margin: 2px 0 10px;
+      font-size: 12px;
+      letter-spacing: .04em;
+      color: rgba(180,240,255,.75);
+    }
+    #gestureModeBtn, #mouseModeBtn{ min-height: 58px; }
+    #startBtn{ min-height: 52px; width: 100%; font-size: 17px; }
+    #restartBtn{ min-height: 48px; min-width: 150px; }
+    #homeBtn{
+      left: 12px;
+      bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+    #status{ left: 12px; top: calc(12px + env(safe-area-inset-top)); }
+    #scoreboard{ right: 12px; top: calc(12px + env(safe-area-inset-top)); }
+    #readouts > div:first-child{ display: none; }   /* 隐去 Blade/Gesture，保留 Combo/Miss */
+    #scoreboard .big{ font-size: 15px; }
+    #scoreboard .small{ font-size: 10px; }
+    #camWrap{
+      width: 120px;
+      right: 12px;
+      bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+    #gameOver .box{ width: min(400px, calc(100vw - 24px)); }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="gl"></canvas>
+
+    <div id="hud">
+      <div id="scanlines"></div>
+      <div class="frame"></div>
+      <div class="grid"></div>
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+
+      <div id="status">
+        <div class="pill"><span class="dot" id="dot"></span><span id="scanText">SCANNER IDLE</span></div>
+        <div id="readouts">
+          <div>Blade: <b id="bladeState">OFF</b> · Gesture: <b id="gestureText">—</b></div>
+          <div>Combo: <b id="comboText">x1</b> · Miss: <b id="missText">0/3</b></div>
+        </div>
+      </div>
+
+      <div id="scoreboard">
+        <div class="big">Score <span id="scoreText">0</span></div>
+        <div class="small" id="fpsText">— fps</div>
+      </div>
+
+      <div id="camWrap">
+        <div class="scan"></div>
+        <div class="label">CAM</div>
+        <div class="blade" id="camBlade">BLADE OFF</div>
+        <video id="cam" autoplay playsinline muted></video>
+        <canvas id="camOverlay"></canvas>
+      </div>
+    </div>
+
+    <div id="flash"></div>
+
+    <div id="overlay">
+      <div id="card">
+        <h1 style="background: linear-gradient(45deg, #6effff, #ff6eff, #6effff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 20px rgba(110,255,255,0.5);">切奶龙司凤版</h1>
+        <p style="font-size:15px; color: rgba(255,255,255,0.9); text-shadow: 0 0 10px rgba(110,255,255,0.3);">选择你的切奶龙方式，躲开炸弹。</p>
+        <div id="mobileHint">📱 手机版 · 单指滑动切割，横屏体验更佳</div>
+        <div style="display: flex; gap: 12px; margin: 20px 0;">
+          <button id="gestureModeBtn" style="flex:1; padding:16px; border-radius:16px; cursor:pointer; border:2px solid rgba(110,255,255,.3); background: linear-gradient(45deg, rgba(110,255,255,.1), rgba(255,110,255,.1)); color: white; font-size:15px; font-weight:600; transition: all .3s; box-shadow: 0 0 15px rgba(110,255,255,0.2);">
+            ✋ 手势控制
+          </button>
+          <button id="mouseModeBtn" style="flex:1; padding:16px; border-radius:16px; cursor:pointer; border:2px solid rgba(110,255,255,.3); background: linear-gradient(45deg, rgba(110,255,255,.1), rgba(255,110,255,.1)); color: white; font-size:15px; font-weight:600; transition: all .3s; box-shadow: 0 0 15px rgba(110,255,255,0.2);">
+            👆 手指滑动
+          </button>
+        </div>
+        <p id="modeDesc" style="font-size:14px; color: rgba(180,240,255,.9); margin:12px 0; text-shadow: 0 0 8px rgba(110,255,255,0.3);">请选择一种切奶龙方式</p>
+        <div class="row">
+          <button id="startBtn" disabled style="padding:14px 24px; border-radius:14px; border:2px solid rgba(110,255,255,.5); background: linear-gradient(45deg, rgba(110,255,255,.2), rgba(255,110,255,.2)); color: white; font-size:16px; font-weight:700; transition: all .3s; box-shadow: 0 0 20px rgba(110,255,255,0.3);">START</button>
+          <div id="note" style="font-size:12px; color: rgba(180,240,255,.8); text-shadow: 0 0 5px rgba(110,255,255,0.2);">相机模式通常需要 <code style="background: rgba(110,255,255,.2); border:1px solid rgba(110,255,255,.3); padding:2px 8px; border-radius:6px;">https</code> 或 <code style="background: rgba(110,255,255,.2); border:1px solid rgba(110,255,255,.3); padding:2px 8px; border-radius:6px;">http://localhost</code> 才能授权。</div>
+        </div>
+        <div id="banner"></div>
+      </div>
+    </div>
+
+    <div id="gameOver">
+      <div class="box">
+        <h2>GAME OVER</h2>
+        <div style="opacity:.85; line-height:1.6">
+          <div>Final Score: <b id="finalScore">0</b></div>
+          <div>Best Combo: <b id="bestCombo">x1</b></div>
+        </div>
+        <button id="restartBtn">RESTART</button>
+      </div>
+    </div>
+
+    <button id="homeBtn" type="button" title="回到模式选择，切换手势/鼠标玩法">← 切换玩法</button>
+  </div>
+
+  <script>
+    // 直接双击 HTML（file://）时浏览器会拦截 ES 模块与相机，给出明确提示
+    if (location.protocol === "file:") {
+      var b = document.getElementById("banner");
+      b.style.display = "block";
+      b.innerHTML = '<strong>请用本地服务器打开：</strong>双击同目录下的「启动游戏.bat」，或在该目录运行 <code>python -m http.server 8770</code> 后访问 <code>http://localhost:8770/</code>。直接双击 HTML 文件无法加载本地 3D 依赖。';
+    }
+  </script>
+  <script type="module">
+    import * as THREE from "./libs/three.module.js";
+
+    // MediaPipe 已本地化到 libs/mediapipe，避免外网/CDN 卡住导致手势模式一直 LOADING
+    let visionLib = null;
+    async function loadVisionLib(){
+      if(visionLib) return visionLib;
+      visionLib = await import("./libs/mediapipe/vision_bundle.js");
+      return visionLib;
+    }
+
+    // ============================================================
+    // CONFIG (tuning)
+    // ============================================================
+    const CFG = {
+      DPR_MAX: 1.75,
+      BG: 0x000000,
+
+      // Ortho world
+      WORLD_Y: 1.0,     // top=+1, bottom=-1
+
+      // ✅ Make fruits NOT exceed the top edge:
+      // We lowered launch velocity range and also added a hard top clamp.
+      TOP_MARGIN: 0.02,        // never cross top boundary (WORLD_Y - r - margin)
+      TOP_BOUNCE: 0.12,        // tiny downward nudge if touching top
+
+      // Physics (tuned to keep peak below top & less "too fast")
+      GRAVITY: -2.10,          // keep decent hang time
+      LAUNCH_VY_MIN: 2.10,     // lowered peak height
+      LAUNCH_VY_MAX: 2.85,
+      LAUNCH_VX: 0.40,         // 横向速度再降一档，避免飞出屏幕
+      SIDE_LIMIT: 0.96,        // 左右边界（相对 aspect），碰到反弹
+      OUT_KILL_Y: -1.58,
+
+      // Spawning / difficulty
+      SPAWN_BASE: 1.00,
+      SPAWN_MIN: 0.48,
+      DIFFICULTY_RAMP: 0.988,
+      MULTI_CHANCE: 0.20,
+      BOMB_CHANCE: 0.10,
+
+      // Fruit visuals/physics
+      FRUIT_R_MIN: 0.11,
+      FRUIT_R_MAX: 0.15,
+      SPIN: 3.2,
+
+      // Slice responsiveness & leniency
+      SLICE_SPEED_MIN: 0.40,
+      SLICE_HOLD_MS: 180,
+      HAND_LOST_MS: 220,
+
+      // Hand tracking (reduce latency)
+      DETECT_EVERY_MS: 50,      // 约 20 次/秒：检测跑在独立循环里，不再插进渲染帧
+      HAND_SMOOTH_K: 26,        // 每秒的跟随系数，越大越跟手
+      HAND_PREDICT_MAX: 0.12,   // 最多向前预测 120ms，抵消相机+推理延迟
+      CAM_OVERLAY_EVERY: 2,     // 每 2 次识别才重画一次骨架，省掉一半 2D 绘制
+      OPEN_EXTENDED_MIN: 3,
+      FIST_EXTENDED_MAX: 1,
+
+      // Ribbon trail
+      TRAIL_POINTS: 54,
+      TRAIL_WIDTH_BASE: 0.070,
+      TRAIL_WIDTH_SPEED: 0.050,
+      TRAIL_ALPHA_ON: 1.0,
+      TRAIL_ALPHA_OFF: 0.20,
+      TRAIL_GLOW_K: 10.0,
+      TRAIL_TAPER_POW: 1.7,
+      TRAIL_FALLBACK_HIDE_MS: 220,
+
+      // Sparks
+      SPARKS_PER_SLICE: 18,
+      SPARK_LIFE: 0.55,
+
+      // Camera overlay
+      CAM_DRAW_GRID: false,
+      CAM_OVERLAY_POINTS: true,
+    };
+
+    // ============================================================
+    // DOM
+    // ============================================================
+    const canvas = document.getElementById("gl");
+    const overlay = document.getElementById("overlay");
+    const startBtn = document.getElementById("startBtn");
+    const banner = document.getElementById("banner");
+    const gestureModeBtn = document.getElementById("gestureModeBtn");
+    const mouseModeBtn = document.getElementById("mouseModeBtn");
+    const modeDesc = document.getElementById("modeDesc");
+    const homeBtn = document.getElementById("homeBtn");
+
+    const hud = document.getElementById("hud");
+    const dot = document.getElementById("dot");
+    const scanText = document.getElementById("scanText");
+    const bladeStateEl = document.getElementById("bladeState");
+    const gestureTextEl = document.getElementById("gestureText");
+    const comboTextEl = document.getElementById("comboText");
+    const missTextEl = document.getElementById("missText");
+
+    const scoreText = document.getElementById("scoreText");
+    const fpsText = document.getElementById("fpsText");
+
+    const flash = document.getElementById("flash");
+
+    const camWrap = document.getElementById("camWrap");
+    const camEl = document.getElementById("cam");
+    const camBlade = document.getElementById("camBlade");
+    const camOverlay = document.getElementById("camOverlay");
+    const camCtx = camOverlay.getContext("2d");
+
+    const gameOver = document.getElementById("gameOver");
+    const finalScoreEl = document.getElementById("finalScore");
+    const bestComboEl = document.getElementById("bestCombo");
+    const restartBtn = document.getElementById("restartBtn");
+
+    // ============================================================
+    // Utils
+    // ============================================================
+    const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+    const lerp = (a,b,t)=>a+(b-a)*t;
+    const nowMs = ()=>performance.now();
+
+    function segCircle(p1, p2, c, r){
+      const vx = p2.x - p1.x, vy = p2.y - p1.y;
+      const wx = c.x - p1.x, wy = c.y - p1.y;
+      const vv = vx*vx + vy*vy;
+      if (vv < 1e-6) return ((wx*wx + wy*wy) <= r*r);
+      let t = (wx*vx + wy*wy) / vv;
+      t = clamp(t, 0, 1);
+      const px = p1.x + t*vx, py = p1.y + t*vy;
+      const dx = c.x - px, dy = c.y - py;
+      return (dx*dx + dy*dy) <= r*r;
+    }
+
+    // ============================================================
+    // Three.js
+    // ============================================================
+    let renderer, scene, camera, aspect;
+    let root, sparksGroup, starsGroup, shockwaveGroup;
+
+    let bladeCursor;
+    let trailMesh, trailMat, trailGeo;
+    let trailWidth = CFG.TRAIL_WIDTH_BASE;
+
+    // 角色素材取自 GitHub: nailong-studio/NaiLong-Universe（奶蛙艺术宇宙）
+    // 原图为白底高清图，构建期已抠成透明背景的 256×256 PNG
+    const CHARACTER_FILES = {
+      nw01: "libs/characters/nw01.png",
+      nw02: "libs/characters/nw02.png",
+      nw03: "libs/characters/nw03.png",
+      nw04: "libs/characters/nw04.png",
+      nw05: "libs/characters/nw05.png",
+      nw06: "libs/characters/nw06.png",
+      nw07: "libs/characters/nw07.png",
+      nw08: "libs/characters/nw08.png",
+      nw09: "libs/characters/nw09.png",
+      nw10: "libs/characters/nw10.png",
+      nw11: "libs/characters/nw11.png",
+      nw12: "libs/characters/nw12.png",
+      nw13: "libs/characters/nw13.png",
+      nw14: "libs/characters/nw14.png"
+    };
+    const fruitTypes = Object.keys(CHARACTER_FILES);
+    const characterImgs = new Map();
+    const characterColors = new Map();
+    const fruitTex = new Map();
+    const halfTexCache = new Map();
+    let bombTex = null;
+    let sparkTex = null;
+
+    function screenToWorld(nx, ny){
+      const x = lerp(-aspect, aspect, nx);
+      const y = lerp(CFG.WORLD_Y, -CFG.WORLD_Y, ny);
+      return { x, y };
+    }
+
+    function initThree(){
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
+      renderer.setClearColor(0x050510, 1);
+      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, CFG.DPR_MAX));
+      renderer.setSize(innerWidth, innerHeight, false);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x3d2817);
+
+      root = new THREE.Group();
+      scene.add(root);
+
+      sparksGroup = new THREE.Group();
+      scene.add(sparksGroup);
+      
+      starsGroup = new THREE.Group();
+      scene.add(starsGroup);
+      
+      shockwaveGroup = new THREE.Group();
+      scene.add(shockwaveGroup);
+
+      initTextures();
+      initBackdrop();
+      initTrailRibbon();
+      initBladeCursor();
+      initShockwave();
+
+      onResize();
+      addEventListener("resize", onResize, { passive: true });
+    }
+
+    function onResize(){
+      aspect = innerWidth / innerHeight;
+      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, CFG.DPR_MAX));
+      renderer.setSize(innerWidth, innerHeight, false);
+
+      camera = new THREE.OrthographicCamera(-aspect, aspect, CFG.WORLD_Y, -CFG.WORLD_Y, 0.01, 100);
+      camera.position.set(0, 0, 10);
+      camera.lookAt(0, 0, 0);
+
+      const rect = camWrap.getBoundingClientRect();
+      const dpr = Math.min(devicePixelRatio||1, 2);
+      camOverlay.width = Math.floor(rect.width * dpr);
+      camOverlay.height = Math.floor(rect.height * dpr);
+    }
+
+    let starPoints = [];
+    
+    function initBackdrop(){
+      starPoints = [];
+      
+      const woodGeom = new THREE.PlaneGeometry(10, 10);
+      const woodMat = new THREE.MeshBasicMaterial({
+        map: woodTex,
+        transparent: false,
+        depthWrite: false
+      });
+      const woodPlane = new THREE.Mesh(woodGeom, woodMat);
+      woodPlane.position.z = -2;
+      scene.add(woodPlane);
+      
+      const lightGrad = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.15,
+        depthWrite: false
+      });
+      const lightGeom = new THREE.CircleGeometry(3, 32);
+      const lightPlane = new THREE.Mesh(lightGeom, lightGrad);
+      lightPlane.position.set(-1, 1, -1.9);
+      scene.add(lightPlane);
+    }
+    
+    function createNebula() {
+      const nebulaCount = 80;
+      const nebulaColors = [
+        { r: 0.4, g: 0.6, b: 1.0 },
+        { r: 0.3, g: 0.8, b: 0.7 },
+        { r: 1.0, g: 0.4, b: 0.6 },
+        { r: 0.8, g: 0.5, b: 1.0 }
+      ];
+      
+      const pos = new Float32Array(nebulaCount * 3);
+      const col = new Float32Array(nebulaCount * 3);
+      const sizes = new Float32Array(nebulaCount);
+      
+      for(let i = 0; i < nebulaCount; i++) {
+        const x = (Math.random() * 2 - 1) * aspect * 1.3;
+        const y = (Math.random() * 2 - 1) * 1.3;
+        const z = -0.6 - Math.random() * 0.2;
+        
+        pos[i * 3 + 0] = x;
+        pos[i * 3 + 1] = y;
+        pos[i * 3 + 2] = z;
+        
+        const color = nebulaColors[i % nebulaColors.length];
+        col[i * 3 + 0] = color.r;
+        col[i * 3 + 1] = color.g;
+        col[i * 3 + 2] = color.b;
+        
+        sizes[i] = 0.08 + Math.random() * 0.12;
+      }
+      
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+      
+      const m = new THREE.PointsMaterial({
+        size: 0.15,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.4,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      });
+      
+      const nebulaPoints = new THREE.Points(g, m);
+      nebulaPoints.userData = { 
+        originalPositions: pos.slice(),
+        sizes: sizes,
+        offset: Math.random() * Math.PI * 2
+      };
+      starsGroup.add(nebulaPoints);
+      starPoints.push(nebulaPoints);
+    }
+    
+    function updateStars(dt, t) {
+      starPoints.forEach((pts, index) => {
+        const userData = pts.userData;
+        if (!userData || !userData.originalPositions) return;
+        
+        const positions = pts.geometry.getAttribute('position');
+        const originalPositions = userData.originalPositions;
+        
+        const speed = userData.speed || 0.015;
+        
+        for (let i = 0; i < positions.count; i++) {
+          const baseX = originalPositions[i * 3];
+          const baseY = originalPositions[i * 3 + 1];
+          const baseZ = originalPositions[i * 3 + 2];
+          
+          const offset = (userData.offset || 0) + i * 0.1;
+          const waveX = Math.sin(t * speed + offset) * 0.02;
+          const waveY = Math.cos(t * speed * 0.8 + offset) * 0.015;
+          
+          positions.setX(i, baseX + waveX);
+          positions.setY(i, baseY + waveY);
+          positions.setZ(i, baseZ);
+        }
+        
+        positions.needsUpdate = true;
+      });
+    }
+
+    // ============================================================
+    // Ribbon Trail
+    // ============================================================
+    const trail = new Array(CFG.TRAIL_POINTS).fill(0).map(()=>({x:999,y:999,t:0}));
+    let trailHead = 0;
+    let lastTrailTime = 0;
+
+    function initTrailRibbon(){
+      const N = CFG.TRAIL_POINTS;
+      const pos = new Float32Array(N * 2 * 3);
+      const uv  = new Float32Array(N * 2 * 2);
+
+      const idx = [];
+      for(let i=0;i<N-1;i++){
+        const a = i*2, b=a+1, c=a+2, d=a+3;
+        idx.push(a,b,c,  b,d,c);
+      }
+
+      trailGeo = new THREE.BufferGeometry();
+      trailGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      trailGeo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+      trailGeo.setIndex(idx);
+
+      trailMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: {
+          uAlpha: { value: 0.0 },
+          uGlowK: { value: CFG.TRAIL_GLOW_K },
+          uTaperPow: { value: CFG.TRAIL_TAPER_POW },
+          uTime: { value: 0.0 },
+          uSpeed: { value: 0.0 },
+        },
+        vertexShader: /*glsl*/`
+          varying vec2 vUv;
+          varying float vPosY;
+          void main(){
+            vUv = uv;
+            vPosY = position.y;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: /*glsl*/`
+          uniform float uAlpha;
+          uniform float uGlowK;
+          uniform float uTaperPow;
+          uniform float uTime;
+          uniform float uSpeed;
+          varying vec2 vUv;
+          varying float vPosY;
+          
+          float random(vec2 st) {
+            return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+          }
+          
+          void main(){
+            float d = abs(vUv.x - 0.5) * 2.0;
+            float glow = exp(-uGlowK * 1.2 * d * d);
+            float glow2 = exp(-uGlowK * 0.4 * d * d);
+            float glow3 = exp(-uGlowK * 0.15 * d * d);
+            float taper = pow(clamp(vUv.y, 0.0, 1.0), uTaperPow);
+            
+            float speedEffect = clamp(uSpeed * 0.6, 0.0, 1.0);
+            float wave = sin(vUv.y * 25.0 + uTime * 6.0) * (0.15 + speedEffect * 0.2) + 1.0;
+            float sparkle = random(vec2(vUv.y * 120.0, uTime * 2.0)) * (0.4 + speedEffect * 0.3) + 0.6;
+            
+            float coreWidth = 0.15 + speedEffect * 0.1;
+            float core = smoothstep(coreWidth, 0.0, d) * sparkle;
+            float innerGlow = smoothstep(0.4, 0.0, d) * 0.6;
+            
+            float energy = 1.0 + speedEffect * 0.8;
+            float a = (glow * 2.0 + glow2 * 1.2 + glow3 * 0.6) * taper * uAlpha * wave * energy;
+            
+            vec3 white = vec3(1.0, 1.0, 1.0);
+            vec3 brightWhite = vec3(0.95, 0.98, 1.0);
+            vec3 col = mix(brightWhite, white, d * 0.5);
+            
+            float speedColor = speedEffect * 0.2;
+            col += vec3(speedColor * 0.3, speedColor * 0.4, speedColor * 0.5);
+            
+            vec3 finalCol = col * (core * 2.5 + innerGlow * 1.5 + glow * 1.0 + glow2 * 0.5 + glow3 * 0.3) * energy;
+            
+            gl_FragColor = vec4(finalCol, a);
+          }
+        `
+      });
+
+      trailMesh = new THREE.Mesh(trailGeo, trailMat);
+      trailMesh.renderOrder = 10;
+      scene.add(trailMesh);
+
+      clearTrail();
+    }
+
+    function clearTrail(){
+      const pos = trailGeo.getAttribute("position");
+      const uv = trailGeo.getAttribute("uv");
+      for(let i=0;i<CFG.TRAIL_POINTS;i++){
+        pos.array[(i*2+0)*3+0] = 999;
+        pos.array[(i*2+0)*3+1] = 999;
+        pos.array[(i*2+0)*3+2] = 0.02;
+
+        pos.array[(i*2+1)*3+0] = 999;
+        pos.array[(i*2+1)*3+1] = 999;
+        pos.array[(i*2+1)*3+2] = 0.02;
+
+        const v = i/(CFG.TRAIL_POINTS-1);
+        uv.array[(i*2+0)*2+0] = 0.0;
+        uv.array[(i*2+0)*2+1] = v;
+        uv.array[(i*2+1)*2+0] = 1.0;
+        uv.array[(i*2+1)*2+1] = v;
+      }
+      pos.needsUpdate = true;
+      uv.needsUpdate = true;
+    }
+
+    function pushTrailPoint(x, y, t){
+      trail[trailHead].x = x;
+      trail[trailHead].y = y;
+      trail[trailHead].t = t;
+      trailHead = (trailHead + 1) % trail.length;
+      lastTrailTime = t;
+
+      const pos = trailGeo.getAttribute("position");
+      const uv = trailGeo.getAttribute("uv");
+      const N = trail.length;
+
+      for(let i=0;i<N;i++){
+        const src = (trailHead - 1 - i + N) % N;
+        const p0 = trail[(src + 1) % N];
+        const p1 = trail[src];
+        const p2 = trail[(src - 1 + N) % N];
+
+        const x1 = p1.x, y1 = p1.y;
+
+        let tx = (p0.x - p2.x);
+        let ty = (p0.y - p2.y);
+        const tl = Math.hypot(tx, ty) || 1.0;
+        tx /= tl; ty /= tl;
+
+        const nx = -ty, ny = tx;
+
+        const v = 1.0 - (i/(N-1));
+        const w = trailWidth * (0.25 + 0.75 * Math.pow(v, 0.9));
+
+        const lx = x1 - nx*w, ly = y1 - ny*w;
+        const rx = x1 + nx*w, ry = y1 + ny*w;
+
+        const vi0 = i*2+0;
+        const vi1 = i*2+1;
+
+        pos.array[vi0*3+0] = lx;
+        pos.array[vi0*3+1] = ly;
+        pos.array[vi0*3+2] = 0.03;
+
+        pos.array[vi1*3+0] = rx;
+        pos.array[vi1*3+1] = ry;
+        pos.array[vi1*3+2] = 0.03;
+
+        uv.array[vi0*2+0] = 0.0;
+        uv.array[vi0*2+1] = v;
+        uv.array[vi1*2+0] = 1.0;
+        uv.array[vi1*2+1] = v;
+      }
+
+      pos.needsUpdate = true;
+      uv.needsUpdate = true;
+    }
+
+    function initBladeCursor(){
+      bladeCursor = makeSprite(sparkTex);
+      bladeCursor.scale.set(0.20, 0.20, 1);
+      bladeCursor.material.color = new THREE.Color(0.45, 0.95, 1.0);
+      bladeCursor.material.opacity = 0.0;
+      bladeCursor.position.set(0, 0, 0.05);
+      bladeCursor.renderOrder = 11;
+      scene.add(bladeCursor);
+    }
+    
+    function initShockwave() {
+      const shockwaveTex = drawShockwaveTexture(128);
+      
+      const shockwaveMat = new THREE.SpriteMaterial({
+        map: shockwaveTex,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        opacity: 0.0
+      });
+      
+      const shockwave = new THREE.Sprite(shockwaveMat);
+      shockwave.scale.set(0.5, 0.5, 1);
+      shockwave.position.set(0, 0, 0.02);
+      shockwave.renderOrder = 9;
+      shockwave.visible = false;
+      shockwaveGroup.add(shockwave);
+    }
+    
+    function drawShockwaveTexture(size=128) {
+      const { c, ctx } = makeCanvas(size);
+      ctx.clearRect(0,0,size,size);
+      
+      const center = size / 2;
+      const gradient = ctx.createRadialGradient(center, center, 0, center, center, size/2);
+      gradient.addColorStop(0, 'rgba(255,255,255,1)');
+      gradient.addColorStop(0.2, 'rgba(110,255,255,0.8)');
+      gradient.addColorStop(0.5, 'rgba(255,110,255,0.4)');
+      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+      
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(center, center, size/2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      return new THREE.CanvasTexture(c);
+    }
+    
+    function createShockwave(x, y) {
+      const shockwave = shockwaveGroup.children[0];
+      if (!shockwave) return;
+      
+      shockwave.position.set(x, y, 0.02);
+      shockwave.scale.set(0.3, 0.3, 1);
+      shockwave.material.opacity = 0.8;
+      shockwave.visible = true;
+      
+      let scale = 0.3;
+      let opacity = 0.8;
+      
+      const animateShockwave = () => {
+        scale += 0.02;
+        opacity -= 0.03;
+        
+        shockwave.scale.set(scale, scale, 1);
+        shockwave.material.opacity = opacity;
+        
+        if (opacity > 0) {
+          requestAnimationFrame(animateShockwave);
+        } else {
+          shockwave.visible = false;
+        }
+      };
+      
+      animateShockwave();
+    }
+
+    // ============================================================
+    // Procedural textures
+    // ============================================================
+    function makeCanvas(size=256){
+      const c = document.createElement("canvas");
+      c.width = c.height = size;
+      const ctx = c.getContext("2d");
+      return { c, ctx };
+    }
+    function circle(ctx, x, y, r){
+      ctx.beginPath();
+      ctx.arc(x,y,r,0,Math.PI*2);
+      ctx.closePath();
+    }
+
+    // ====== 奶龙角色贴图（真实素材，运行时按卡面比例装入方形贴图） ======
+    function loadCharacters(){
+      return Promise.all(Object.entries(CHARACTER_FILES).map(([type, url]) => new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          characterImgs.set(type, img);
+          characterColors.set(type, sampleCharacterColor(img));
+          resolve();
+        };
+        img.onerror = () => reject(new Error("角色图加载失败: " + url));
+        img.src = url;
+      })));
+    }
+
+    function sampleCharacterColor(img){
+      const { c, ctx } = makeCanvas(16);
+      ctx.drawImage(img, 0, 0, 16, 16);
+      const d = ctx.getImageData(0, 0, 16, 16).data;
+      let r=0, g=0, b=0, n=0;
+      for(let i=0;i<d.length;i+=4){
+        if(d[i+3] < 40) continue;
+        r+=d[i]; g+=d[i+1]; b+=d[i+2]; n++;
+      }
+      if(!n) return { r: 1, g: 0.85, b: 0.35 };
+      r/=n*255; g/=n*255; b/=n*255;
+      const mx = Math.max(r,g,b), mn = Math.min(r,g,b), span = Math.max(1e-6, mx-mn);
+      return {
+        r: 0.35 + 0.65*(r-mn)/span,
+        g: 0.35 + 0.65*(g-mn)/span,
+        b: 0.35 + 0.65*(b-mn)/span
+      };
+    }
+
+    function characterCanvas(type, size=256){
+      const img = characterImgs.get(type);
+      const { c, ctx } = makeCanvas(size);
+      ctx.clearRect(0,0,size,size);
+      if(!img) return c;
+
+      // 透明底奶蛙，等比放入方形贴图，留一点边距
+      const pad = size * 0.04;
+      const k = Math.min((size - pad*2) / img.width, (size - pad*2) / img.height);
+      const w = img.width * k, h = img.height * k;
+      const x = (size - w) / 2, y = (size - h) / 2;
+
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.55)";
+      ctx.shadowBlur = size * 0.055;
+      ctx.shadowOffsetY = size * 0.012;
+      ctx.drawImage(img, x, y, w, h);
+      ctx.restore();
+
+      return c;
+    }
+
+    function drawWoodTexture(size=512){
+      const { c, ctx } = makeCanvas(size);
+      
+      const baseGrad = ctx.createLinearGradient(0, 0, 0, size);
+      baseGrad.addColorStop(0, '#5c3d2e');
+      baseGrad.addColorStop(0.3, '#4a2f1f');
+      baseGrad.addColorStop(0.5, '#5c3d2e');
+      baseGrad.addColorStop(0.7, '#4a2f1f');
+      baseGrad.addColorStop(1, '#5c3d2e');
+      ctx.fillStyle = baseGrad;
+      ctx.fillRect(0, 0, size, size);
+      
+      ctx.globalAlpha = 0.3;
+      for(let i=0; i<40; i++){
+        const y = Math.random() * size;
+        const width = 2 + Math.random() * 8;
+        const grainGrad = ctx.createLinearGradient(0, y - 50, 0, y + 50);
+        grainGrad.addColorStop(0, 'transparent');
+        grainGrad.addColorStop(0.3, '#3a2015');
+        grainGrad.addColorStop(0.5, '#4a2f1f');
+        grainGrad.addColorStop(0.7, '#3a2015');
+        grainGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grainGrad;
+        ctx.fillRect(0, y - 50, size, 100);
+      }
+      ctx.globalAlpha = 1;
+      
+      ctx.globalAlpha = 0.15;
+      for(let i=0; i<15; i++){
+        const x = Math.random() * size;
+        const y = Math.random() * size;
+        const radius = 50 + Math.random() * 100;
+        const knotGrad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+        knotGrad.addColorStop(0, '#2a1508');
+        knotGrad.addColorStop(0.5, '#3a2015');
+        knotGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = knotGrad;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      
+      ctx.globalAlpha = 0.1;
+      for(let i=0; i<100; i++){
+        const x = Math.random() * size;
+        const y = Math.random() * size;
+        const spotGrad = ctx.createRadialGradient(x, y, 0, x, y, 3 + Math.random() * 5);
+        spotGrad.addColorStop(0, '#1a0a05');
+        spotGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = spotGrad;
+        ctx.beginPath();
+        ctx.arc(x, y, 3 + Math.random() * 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      
+      const varnishGrad = ctx.createRadialGradient(size*0.3, size*0.2, 0, size*0.5, size*0.5, size*0.8);
+      varnishGrad.addColorStop(0, 'rgba(255,255,255,0.15)');
+      varnishGrad.addColorStop(0.5, 'rgba(255,255,255,0.05)');
+      varnishGrad.addColorStop(1, 'rgba(0,0,0,0.1)');
+      ctx.fillStyle = varnishGrad;
+      ctx.fillRect(0, 0, size, size);
+      
+      return c;
+    }
+
+    function drawBombTexture(size=256){
+      const { c, ctx } = makeCanvas(size);
+      ctx.clearRect(0,0,size,size);
+
+      ctx.save();
+      ctx.translate(size/2,size/2);
+
+      const g = ctx.createRadialGradient(-size*0.15,-size*0.18, size*0.05, 0,0,size*0.6);
+      g.addColorStop(0, "rgba(255,255,255,0.25)");
+      g.addColorStop(0.15, "rgba(70,70,80,1)");
+      g.addColorStop(0.5, "rgba(30,30,35,1)");
+      g.addColorStop(0.8, "rgba(15,15,18,1)");
+      g.addColorStop(1, "rgba(0,0,0,1)");
+      ctx.fillStyle = g; circle(ctx,0,0,size*0.44); ctx.fill();
+
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = "rgba(255,60,60,0.9)";
+      ctx.lineWidth = 8;
+      ctx.beginPath(); ctx.arc(0,0,size*0.32,0,Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = 0.2;
+      ctx.strokeStyle = "rgba(255,100,100,0.8)";
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(0,0,size*0.28,0,Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      ctx.strokeStyle = "rgba(160,120,60,1)";
+      ctx.lineWidth = 14; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(size*0.08, -size*0.40); 
+      ctx.quadraticCurveTo(size*0.12, -size*0.48, size*0.16, -size*0.52); 
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(200,150,80,0.6)";
+      ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.moveTo(size*0.08, -size*0.40); 
+      ctx.quadraticCurveTo(size*0.12, -size*0.48, size*0.16, -size*0.52); 
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(255,220,140,1)";
+      circle(ctx, size*0.18, -size*0.54, size*0.05); ctx.fill();
+      ctx.fillStyle = "rgba(255,180,100,1)";
+      circle(ctx, size*0.22, -size*0.58, size*0.035); ctx.fill();
+      ctx.fillStyle = "rgba(255,100,60,1)";
+      circle(ctx, size*0.26, -size*0.62, size*0.022); ctx.fill();
+      ctx.fillStyle = "rgba(255,60,30,1)";
+      circle(ctx, size*0.29, -size*0.65, size*0.012); ctx.fill();
+
+      const h = ctx.createRadialGradient(-size*0.18,-size*0.18, size*0.02, -size*0.12,-size*0.12, size*0.30);
+      h.addColorStop(0, "rgba(255,255,255,0.35)");
+      h.addColorStop(0.3, "rgba(255,255,255,0.15)");
+      h.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = h; circle(ctx, -size*0.14, -size*0.14, size*0.32); ctx.fill();
+
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalCompositeOperation = "destination-in";
+      const m = ctx.createRadialGradient(size/2,size/2, size*0.08, size/2,size/2, size*0.52);
+      m.addColorStop(0, "rgba(0,0,0,1)");
+      m.addColorStop(0.92, "rgba(0,0,0,1)");
+      m.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = m;
+      circle(ctx, size/2, size/2, size*0.52);
+      ctx.fill();
+      ctx.restore();
+
+      return c;
+    }
+
+    function drawSparkTexture(size=128){
+      const { c, ctx } = makeCanvas(size);
+      ctx.clearRect(0,0,size,size);
+      ctx.save();
+      ctx.translate(size/2,size/2);
+      const g = ctx.createRadialGradient(0,0, 0, 0,0, size*0.48);
+      g.addColorStop(0, "rgba(255,255,255,0.95)");
+      g.addColorStop(0.18, "rgba(255,255,255,0.45)");
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g;
+      circle(ctx,0,0,size*0.48);
+      ctx.fill();
+      ctx.restore();
+      return c;
+    }
+
+    let woodTex = null;
+    
+    function initTextures(){
+      for(const t of fruitTypes){
+        const cnv = characterCanvas(t, 256);
+        const tex = new THREE.CanvasTexture(cnv);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = 4;
+        fruitTex.set(t, tex);
+      }
+      bombTex = new THREE.CanvasTexture(drawBombTexture(256));
+      bombTex.colorSpace = THREE.SRGBColorSpace;
+      bombTex.anisotropy = 4;
+
+      sparkTex = new THREE.CanvasTexture(drawSparkTexture(128));
+      sparkTex.colorSpace = THREE.SRGBColorSpace;
+      sparkTex.anisotropy = 2;
+      
+      woodTex = new THREE.CanvasTexture(drawWoodTexture(512));
+      woodTex.colorSpace = THREE.SRGBColorSpace;
+      woodTex.wrapS = THREE.RepeatWrapping;
+      woodTex.wrapT = THREE.RepeatWrapping;
+      woodTex.repeat.set(2, 2);
+    }
+
+    function getHalfTexture(type, side){
+      const key = `${type}:${side}`;
+      if(halfTexCache.has(key)) return halfTexCache.get(key);
+
+      const base = characterCanvas(type, 256);
+      const { c, ctx } = makeCanvas(256);
+      ctx.clearRect(0,0,256,256);
+      ctx.save();
+      ctx.beginPath();
+      if(side === "L") ctx.rect(0,0,128,256);
+      else ctx.rect(128,0,128,256);
+      ctx.clip();
+      ctx.drawImage(base, 0, 0);
+      ctx.restore();
+
+      const cutX = 128;
+      const col = characterColors.get(type) || { r: 1, g: 0.85, b: 0.35 };
+      const fleshColor = `rgba(${Math.round(255*(0.45+0.55*col.r))},${Math.round(255*(0.45+0.55*col.g))},${Math.round(255*(0.45+0.55*col.b))},1)`;
+
+      ctx.save();
+      ctx.translate(cutX, 0);
+      // source-atop：切面颜色只画在奶蛙本体像素上，透明区域保持透明
+      ctx.globalCompositeOperation = "source-atop";
+      
+      const fleshGrad = ctx.createLinearGradient(0, 0, 15, 0);
+      fleshGrad.addColorStop(0, fleshColor);
+      fleshGrad.addColorStop(0.6, fleshColor.replace("1)", "0.6)"));
+      fleshGrad.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = fleshGrad;
+      ctx.beginPath();
+      ctx.rect(0, 0, 18, 256);
+      ctx.fill();
+      
+      const edgeGrad = ctx.createLinearGradient(0, 0, 8, 0);
+      edgeGrad.addColorStop(0, "rgba(255,255,255,0.45)");
+      edgeGrad.addColorStop(0.5, "rgba(255,255,255,0.15)");
+      edgeGrad.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = edgeGrad;
+      ctx.beginPath();
+      ctx.rect(0, 0, 10, 256);
+      ctx.fill();
+      ctx.restore();
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      halfTexCache.set(key, tex);
+      return tex;
+    }
+
+    // ============================================================
+    // Sprites & game objects
+    // ============================================================
+    const fruits = [];
+    const halves = [];
+    const sparks = [];
+
+    function makeSprite(texture, isFruit = false){
+      const mat = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.NormalBlending,
+        opacity: 1.0
+      });
+      
+      const sp = new THREE.Sprite(mat);
+      sp.position.z = 0;
+      
+      if (isFruit) {
+        sp.userData = {
+          pulsePhase: Math.random() * Math.PI * 2,
+          originalScale: 1.0,
+          glowIntensity: 0.5 + Math.random() * 0.3
+        };
+      }
+      
+      return sp;
+    }
+
+    function spawnFruit(isBomb=false){
+      const type = isBomb ? "bomb" : fruitTypes[(Math.random()*fruitTypes.length)|0];
+      const r = isBomb ? lerp(0.12, 0.16, Math.random()) : lerp(CFG.FRUIT_R_MIN, CFG.FRUIT_R_MAX, Math.random());
+      const x = (Math.random()*2 - 1) * (aspect * 0.68);
+      const y = -CFG.WORLD_Y - 0.22;
+
+      // ✅ lowered VY => peak won't exceed top
+      const vy = lerp(CFG.LAUNCH_VY_MIN, CFG.LAUNCH_VY_MAX, Math.random());
+      let vx = (Math.random()*2 - 1) * CFG.LAUNCH_VX;
+      // 靠边出生的，横向速度朝屏幕中心，别一出生就往外飞
+      if (Math.abs(x) > aspect * 0.5) vx = -Math.sign(x) * (0.16 + Math.random() * 0.2);
+      const spin = (Math.random()*2 - 1) * CFG.SPIN;
+
+      const sprite = makeSprite(isBomb ? bombTex : fruitTex.get(type), !isBomb);
+      sprite.scale.set(r*2, r*2, 1);
+      sprite.position.set(x, y, 0);
+      
+      if (!isBomb) {
+        sprite.userData.originalScale = r*2;
+      }
+
+      const obj = {
+        isBomb,
+        type,
+        r,
+        x, y,
+        vx, vy,
+        spin,
+        rot: Math.random()*Math.PI*2,
+        sliced: false,
+        missable: !isBomb,
+        sprite
+      };
+      sprite.material.rotation = obj.rot;
+
+      root.add(sprite);
+      fruits.push(obj);
+    }
+
+    function spawnHalves(fruit, cutDir){
+      const nx = -cutDir.dy, ny = cutDir.dx;
+      const push = fruit.r * 0.28;
+
+      const leftTex = getHalfTexture(fruit.type, "L");
+      const rightTex = getHalfTexture(fruit.type, "R");
+
+      const a = makeSprite(leftTex);
+      const b = makeSprite(rightTex);
+
+      a.scale.set(fruit.r*2, fruit.r*2, 1);
+      b.scale.set(fruit.r*2, fruit.r*2, 1);
+
+      a.position.set(fruit.x - nx*push, fruit.y - ny*push, 0);
+      b.position.set(fruit.x + nx*push, fruit.y + ny*push, 0);
+
+      const baseVx = fruit.vx;
+      const baseVy = fruit.vy;
+
+      const kick = 0.85;
+      const upKick = 0.35;
+
+      const ha = {
+        x: a.position.x, y: a.position.y,
+        vx: baseVx - nx*kick, vy: baseVy - ny*kick + upKick,
+        rot: fruit.rot, spin: fruit.spin * 1.1,
+        life: 1.2, sprite: a
+      };
+      const hb = {
+        x: b.position.x, y: b.position.y,
+        vx: baseVx + nx*kick, vy: baseVy + ny*kick + upKick,
+        rot: fruit.rot, spin: -fruit.spin * 1.05,
+        life: 1.2, sprite: b
+      };
+
+      a.material.rotation = ha.rot;
+      b.material.rotation = hb.rot;
+
+      root.add(a);
+      root.add(b);
+      halves.push(ha, hb);
+    }
+
+    function fruitColor(type){
+      return characterColors.get(type) || { r: 0.95, g: 0.85, b: 0.35 };
+    }
+
+    function spawnSparks(x, y, color){
+      for(let i=0;i<CFG.SPARKS_PER_SLICE;i++){
+        const sp = makeSprite(sparkTex);
+        sp.material.opacity = 0.0;
+        sp.material.color = new THREE.Color(color.r, color.g, color.b);
+        sp.scale.set(0.11, 0.11, 1);
+        sp.position.set(x, y, 0.01);
+
+        const a = Math.random()*Math.PI*2;
+        const s = 0.65 + Math.random()*1.55;
+
+        sparksGroup.add(sp);
+        sparks.push({
+          x, y,
+          vx: Math.cos(a)*s*0.55,
+          vy: Math.sin(a)*s*0.55 + 0.42,
+          life: CFG.SPARK_LIFE,
+          sprite: sp
+        });
+      }
+    }
+
+    // ============================================================
+    // MediaPipe Hands
+    // ============================================================
+    let handLandmarker = null;
+    let detectTimer = 0;
+    let detectCount = 0;
+
+    const hand = {
+      ready: false,
+      detected: false,
+      lastSeen: 0,
+      fx: 0.5, fy: 0.5,
+      fxT: 0.5, fyT: 0.5,
+      vx: 0, vy: 0,
+      lastDetectT: 0,
+      wx: 0, wy: 0,
+      gesture: "NONE",
+      bladeOn: false
+    };
+
+    function bannerMsg(html){
+      banner.style.display = "block";
+      banner.innerHTML = html;
+    }
+
+    async function initMediaPipeAndCamera(){
+      if(!window.isSecureContext){
+        bannerMsg(`<strong>相机被阻止：</strong>当前不是安全上下文。请用 <code>https</code> 或 <code>http://localhost</code> 打开。`);
+        throw new Error("Insecure context: camera blocked");
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        // 480x360 足够手部识别，推理量约为 640x480 的 56%
+        video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 30, max: 30 } },
+        audio: false
+      });
+      camEl.srcObject = stream;
+      await camEl.play();
+      camWrap.style.display = "block";
+
+      const { HandLandmarker, FilesetResolver } = await loadVisionLib();
+
+      const wasmDir = new URL("./libs/mediapipe/wasm", location.href).href;
+      const modelUrl = new URL("./libs/mediapipe/hand_landmarker.task", location.href).href;
+
+      const vision = await FilesetResolver.forVisionTasks(wasmDir);
+
+      const options = {
+        baseOptions: { modelAssetPath: modelUrl, delegate: "GPU" },
+        runningMode: "VIDEO",
+        numHands: 1,
+        minHandDetectionConfidence: 0.55,
+        minHandPresenceConfidence: 0.55,
+        minTrackingConfidence: 0.55
+      };
+
+      try {
+        handLandmarker = await HandLandmarker.createFromOptions(vision, options);
+      } catch (e) {
+        // 部分机器/浏览器没有可用的 GPU delegate，退回 CPU
+        console.warn("GPU delegate 不可用，改用 CPU:", e);
+        options.baseOptions.delegate = "CPU";
+        handLandmarker = await HandLandmarker.createFromOptions(vision, options);
+      }
+
+      hand.ready = true;
+      startDetectLoop();
+    }
+
+    // 识别循环独立于渲染循环：detectForVideo 是同步推理，放在 step() 里会直接卡住每一帧
+    function startDetectLoop(){
+      if(detectTimer) return;
+      const tick = () => {
+        // 先排下一轮，保证单次推理抛错也不会断掉循环
+        detectTimer = setTimeout(tick, CFG.DETECT_EVERY_MS);
+
+        if(!handLandmarker || camEl.readyState < 2) return;
+
+        const t = nowMs();
+        try{
+          const res = handLandmarker.detectForVideo(camEl, t);
+          detectCount++;
+          updateHand(res, t);
+        } catch(e){
+          console.warn("hand detect failed:", e);
+        }
+      };
+      detectTimer = setTimeout(tick, 0);
+    }
+
+    function d2(a,b){
+      const dx = a.x-b.x, dy = a.y-b.y;
+      return Math.hypot(dx,dy);
+    }
+
+    function fingerExtended(lm, tip, mcp){
+      const wrist = lm[0];
+      return d2(lm[tip], wrist) / Math.max(1e-6, d2(lm[mcp], wrist)) > 1.18;
+    }
+
+    function classifyGesture(lm){
+      const index = fingerExtended(lm, 8, 5);
+      const middle = fingerExtended(lm, 12, 9);
+      const ring = fingerExtended(lm, 16, 13);
+      const pinky = fingerExtended(lm, 20, 17);
+      const extended = [index, middle, ring, pinky].filter(Boolean).length;
+
+      if(!index && extended <= CFG.FIST_EXTENDED_MAX) return "FIST";
+      if(extended >= CFG.OPEN_EXTENDED_MIN) return "OPEN";
+      return index ? "INDEX" : "OTHER";
+    }
+
+    function updateHand(result, t){
+      const has = !!(result?.landmarks?.length);
+      if(!has){
+        if(hand.detected && (t - hand.lastSeen) > CFG.HAND_LOST_MS){
+          hand.detected = false;
+          hand.gesture = "NONE";
+          hand.bladeOn = false;
+        }
+        return;
+      }
+
+      const lm = result.landmarks[0];
+      // 直接用食指指尖（landmark 8）当刀尖
+      const tip = lm[8];
+
+      const nx = 1.0 - tip.x;
+      const ny = tip.y;
+
+      // 用相邻两次识别的位移估算指尖速度，供每帧插值预测
+      if(hand.lastDetectT > 0){
+        const dts = Math.max(0.001, (t - hand.lastDetectT) / 1000);
+        hand.vx = hand.vx * 0.5 + ((nx - hand.fxT) / dts) * 0.5;
+        hand.vy = hand.vy * 0.5 + ((ny - hand.fyT) / dts) * 0.5;
+      }
+      hand.fxT = nx;
+      hand.fyT = ny;
+      hand.lastDetectT = t;
+
+      hand.gesture = classifyGesture(lm);
+      // 食指伸出即开刀，握拳才关刀
+      hand.bladeOn = hand.gesture !== "FIST";
+
+      hand.detected = true;
+      hand.lastSeen = t;
+
+      if(CFG.CAM_OVERLAY_POINTS && (detectCount % CFG.CAM_OVERLAY_EVERY === 0)) drawCamOverlay(lm, hand.bladeOn);
+    }
+
+    // 每帧调用：在两次识别之间做插值 + 延迟补偿，避免刀尖一跳一跳
+    function stepHand(t, dt){
+      const age = clamp((t - hand.lastDetectT) / 1000, 0, CFG.HAND_PREDICT_MAX);
+      const tx = clamp(hand.fxT + hand.vx * age, 0, 1);
+      const ty = clamp(hand.fyT + hand.vy * age, 0, 1);
+
+      const k = 1 - Math.exp(-dt * CFG.HAND_SMOOTH_K);
+      hand.fx += (tx - hand.fx) * k;
+      hand.fy += (ty - hand.fy) * k;
+
+      const w = screenToWorld(hand.fx, hand.fy);
+      hand.wx = w.x;
+      hand.wy = w.y;
+    }
+
+    function drawCamOverlay(lm, bladeOn){
+      const w = camOverlay.width, h = camOverlay.height;
+      camCtx.clearRect(0,0,w,h);
+
+      const key = [0, 5, 9, 13, 17, 8, 12, 16, 20];
+      camCtx.save();
+      camCtx.globalCompositeOperation = "lighter";
+
+      for(const idx of key){
+        const p = lm[idx];
+        const x = (1 - p.x) * w;
+        const y = p.y * h;
+
+        const isTip = (idx === 8);
+        const r = isTip ? 8 : 4;
+
+        const g = camCtx.createRadialGradient(x,y,0, x,y,r*2.2);
+        g.addColorStop(0, bladeOn ? "rgba(110,255,220,.95)" : "rgba(255,200,120,.85)");
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        camCtx.fillStyle = g;
+        camCtx.beginPath();
+        camCtx.arc(x,y,r*2.2,0,Math.PI*2);
+        camCtx.fill();
+
+        camCtx.fillStyle = bladeOn ? "rgba(220,255,248,.95)" : "rgba(255,235,210,.90)";
+        camCtx.beginPath();
+        camCtx.arc(x,y,r,0,Math.PI*2);
+        camCtx.fill();
+      }
+
+      const tip = lm[8];
+      const tx = (1 - tip.x) * w;
+      const ty = tip.y * h;
+      camCtx.globalAlpha = 0.55;
+      camCtx.strokeStyle = bladeOn ? "rgba(110,255,220,.85)" : "rgba(255,200,120,.85)";
+      camCtx.lineWidth = 1.5;
+      camCtx.beginPath(); camCtx.moveTo(tx-10,ty); camCtx.lineTo(tx+10,ty); camCtx.stroke();
+      camCtx.beginPath(); camCtx.moveTo(tx,ty-10); camCtx.lineTo(tx,ty+10); camCtx.stroke();
+
+      camCtx.restore();
+    }
+
+    // ============================================================
+    // Control mode
+    // ============================================================
+    let controlMode = null; // 'gesture' or 'mouse'
+
+    // Mouse control state
+    const mouse = {
+      active: false,
+      x: 0.5,
+      y: 0.5,
+      wx: 0,
+      wy: 0,
+      bladeOn: false
+    };
+
+    // ============================================================
+    // Gameplay state
+    // ============================================================
+    let started = false;
+    let running = false;
+    let spawnTimer = 0;
+    let spawnInterval = CFG.SPAWN_BASE;
+
+    let score = 0;
+    let combo = 1;
+    let bestCombo = 1;
+    let misses = 0;
+    const MISS_MAX = 3;
+
+    let prevHandWorld = { x: 0, y: 0 };
+    let prevHandWorldValid = false;
+
+    let fpsFrames = 0;
+    let fpsLast = performance.now();
+
+    // 音效系统
+    let audioCtx = null;
+    let noiseBuf = null;
+
+    // ===== 用户提供的音频 =====
+    // 1000038983.mp3：40 秒，游戏进行中循环播放
+    // 1000038984.mp3：11 秒，输掉游戏后播放
+    const bgmEl = new Audio("1000038983.mp3");
+    bgmEl.loop = true;
+    bgmEl.volume = 0.26;
+    bgmEl.preload = "auto";
+
+    const overEl = new Audio("1000038984.mp3");
+    overEl.volume = 0.9;
+    overEl.preload = "auto";
+
+    // 结束音效用 Web Audio 预解码后播放：GAME OVER 时立即出声，不会因元素还在缓冲而听不到
+    let overBuffer = null;
+    let overNode = null;
+
+    async function loadOverSound() {
+      if (!audioCtx || overBuffer) return;
+      try {
+        const res = await fetch("1000038984.mp3");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        overBuffer = await audioCtx.decodeAudioData(await res.arrayBuffer());
+      } catch (e) {
+        console.warn("结束音效预加载失败，改用 <audio> 播放：", e.message);
+      }
+    }
+
+    function startBgm() {
+      bgmEl.currentTime = 0;
+      const p = bgmEl.play();
+      if (p && p.catch) p.catch(() => {});
+    }
+
+    function stopBgm() {
+      bgmEl.pause();
+    }
+
+    function stopOverSound() {
+      if (overNode) {
+        try { overNode.stop(); } catch (e) {}
+        overNode.disconnect();
+        overNode = null;
+      }
+      overEl.pause();
+      overEl.currentTime = 0;
+    }
+
+    // ===== 自定义音效 =====
+    // 想替换某个音效，把文件放进 libs/audio/，再把下面的路径填上即可。
+    // 留空 = 继续用代码合成的音效。支持 mp3 / wav / ogg。
+    const CUSTOM_SOUNDS = {
+      slice: "",      // 如 "libs/audio/slice.mp3"
+      bomb: "",       // 如 "libs/audio/bomb.mp3"
+      miss: "",       // 如 "libs/audio/miss.mp3"
+      start: ""       // 如 "libs/audio/start.mp3"
+    };
+    const soundBuffers = new Map();
+
+    async function loadCustomSounds() {
+      if (!audioCtx) return;
+      for (const [key, url] of Object.entries(CUSTOM_SOUNDS)) {
+        if (!url || soundBuffers.has(key)) continue;
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const buf = await res.arrayBuffer();
+          soundBuffers.set(key, await audioCtx.decodeAudioData(buf));
+        } catch (e) {
+          console.warn(`自定义音效 ${key} 加载失败，继续用合成音：`, url, e.message);
+        }
+      }
+    }
+
+    // 有自定义音频就播它，返回 true 表示已处理
+    function playSample(key, volume = 1) {
+      const buf = soundBuffers.get(key);
+      if (!buf || !audioCtx) return false;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      const g = audioCtx.createGain();
+      g.gain.value = volume;
+      src.connect(g);
+      g.connect(audioCtx.destination);
+      src.start();
+      return true;
+    }
+    
+    // 屏幕震动系统
+    let shakeIntensity = 0;
+    let shakeTime = 0;
+    
+    function triggerShake(combo) {
+      const minCombo = 3;
+      if (combo >= minCombo) {
+        const intensity = Math.min(1.0, (combo - minCombo) / 8.0);
+        shakeIntensity = Math.max(shakeIntensity, 0.03 + intensity * 0.08);
+        shakeTime = 0.3 + intensity * 0.3;
+      }
+    }
+    
+    function initAudio() {
+      if (audioCtx) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        return;
+      }
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+
+      audioCtx = new AC();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      // 预生成一段白噪声，切片/爆炸共用，避免每次现算
+      const len = Math.floor(audioCtx.sampleRate * 0.5);
+      noiseBuf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+
+      loadCustomSounds();
+      loadOverSound();
+    }
+    
+    function playSliceSound(combo) {
+      if (!audioCtx || !noiseBuf) return;
+      if (playSample("slice", 0.8)) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      const t0 = audioCtx.currentTime;
+
+      // “唰”——白噪声带通扫频，连击越高越尖
+      const src = audioCtx.createBufferSource();
+      src.buffer = noiseBuf;
+
+      const bp = audioCtx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.Q.value = 1.1;
+      bp.frequency.setValueAtTime(3200 + combo * 160, t0);
+      bp.frequency.exponentialRampToValueAtTime(900, t0 + 0.13);
+
+      const ng = audioCtx.createGain();
+      ng.gain.setValueAtTime(0.0001, t0);
+      ng.gain.exponentialRampToValueAtTime(0.42, t0 + 0.008);
+      ng.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.15);
+
+      src.connect(bp); bp.connect(ng); ng.connect(audioCtx.destination);
+      src.start(t0); src.stop(t0 + 0.17);
+
+      // 叠一个短促的“叮”，连击越高音越高
+      const osc = audioCtx.createOscillator();
+      const og = audioCtx.createGain();
+      osc.type = 'triangle';
+      const f = 520 + (combo - 1) * 46;
+      osc.frequency.setValueAtTime(f, t0);
+      osc.frequency.exponentialRampToValueAtTime(f * 1.5, t0 + 0.05);
+
+      og.gain.setValueAtTime(0.12, t0);
+      og.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+
+      osc.connect(og); og.connect(audioCtx.destination);
+      osc.start(t0); osc.stop(t0 + 0.1);
+    }
+    
+    function playBombSound() {
+      if (!audioCtx) return;
+      if (playSample("bomb", 0.9)) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      const t0 = audioCtx.currentTime;
+
+      // 低频冲击
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(110, t0);
+      osc.frequency.exponentialRampToValueAtTime(24, t0 + 0.55);
+      gainNode.gain.setValueAtTime(0.45, t0);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.62);
+
+      // 噪声爆裂
+      if (noiseBuf) {
+        const src = audioCtx.createBufferSource();
+        src.buffer = noiseBuf;
+        const lp = audioCtx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(3800, t0);
+        lp.frequency.exponentialRampToValueAtTime(320, t0 + 0.5);
+        const ng = audioCtx.createGain();
+        ng.gain.setValueAtTime(0.5, t0);
+        ng.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.55);
+        src.connect(lp); lp.connect(ng); ng.connect(audioCtx.destination);
+        src.start(t0); src.stop(t0 + 0.6);
+      }
+    }
+    
+    function playMissSound() {
+      if (!audioCtx) return;
+      if (playSample("miss", 0.8)) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+      osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.2);
+      
+      gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+      
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.2);
+    }
+
+    // 一段短的音列，用来做开场/结束提示音
+    function playTones(freqs, step, gain, type = 'triangle') {
+      if (!audioCtx) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      const t0 = audioCtx.currentTime;
+      freqs.forEach((f, i) => {
+        const at = t0 + i * step;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(f, at);
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.exponentialRampToValueAtTime(gain, at + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, at + step * 1.8);
+        osc.connect(g); g.connect(audioCtx.destination);
+        osc.start(at); osc.stop(at + step * 2);
+      });
+    }
+
+    function playStartSound() {
+      if (playSample("start", 0.8)) return;
+      playTones([330, 494, 660], 0.10, 0.18);
+    }
+
+    function playGameOverSound() {
+      // 优先走已解锁的 Web Audio：数据在内存里，直接出声
+      if (overBuffer && audioCtx) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        stopOverSound();
+        overNode = audioCtx.createBufferSource();
+        overNode.buffer = overBuffer;
+        const g = audioCtx.createGain();
+        g.gain.value = 1.0;
+        overNode.connect(g);
+        g.connect(audioCtx.destination);
+        overNode.start();
+        return;
+      }
+
+      overEl.currentTime = 0;
+      const p = overEl.play();
+      if (p && p.catch) p.catch((e) => console.warn("gameover 音效播放失败：", e.name, e.message));
+    }
+
+    function hitFlash(){
+      flash.classList.add("on");
+      setTimeout(()=>flash.classList.remove("on"), 85);
+    }
+
+    function resetGame(){
+      for(const f of fruits){ root.remove(f.sprite); f.sprite.material.dispose?.(); }
+      fruits.length = 0;
+      for(const h of halves){ root.remove(h.sprite); h.sprite.material.dispose?.(); }
+      halves.length = 0;
+      for(const s of sparks){ sparksGroup.remove(s.sprite); s.sprite.material.dispose?.(); }
+      sparks.length = 0;
+
+      score = 0;
+      combo = 1;
+      bestCombo = 1;
+      misses = 0;
+
+      spawnTimer = 0;
+      spawnInterval = CFG.SPAWN_BASE;
+
+      scoreText.textContent = "0";
+      comboTextEl.textContent = "x1";
+      missTextEl.textContent = "0/3";
+
+      clearTrail();
+      prevHandWorldValid = false;
+
+      running = true;
+      gameOver.style.display = "none";
+      flash.classList.remove("on");
+      
+      initAudio();
+    }
+
+    function endGame(reason=""){
+      running = false;
+      stopBgm();
+      finalScoreEl.textContent = String(score);
+      bestComboEl.textContent = "x" + String(bestCombo);
+      gameOver.style.display = "grid";
+      scanText.textContent = reason ? reason : "GAME OVER";
+      hudScan = null;
+
+      playGameOverSound();
+    }
+
+    // ============================================================
+    // Main loop
+    // ============================================================
+    let lastTime = performance.now();
+
+    // HUD 每帧都写 DOM 会持续触发样式重算；只在状态真的变化时更新
+    let hudTracking = null;
+    let hudScan = null;
+    let hudGesture = null;
+    let hudBlade = null;
+
+    function updateBladeUi(on){
+      if(hudBlade === on) return;
+      hudBlade = on;
+      bladeStateEl.textContent = on ? "ON" : "OFF";
+      bladeStateEl.style.color = on ? "rgba(110,255,220,.95)" : "rgba(255,200,120,.9)";
+      camBlade.textContent = on ? "BLADE ON" : "BLADE OFF";
+      camBlade.style.borderColor = on ? "rgba(110,255,220,.25)" : "rgba(255,200,120,.25)";
+      camBlade.style.color = on ? "rgba(110,255,220,.95)" : "rgba(255,200,120,.95)";
+    }
+
+    function step(dt){
+      const t = nowMs();
+      const tSec = t * 0.001;
+
+      let currentPos, currentBladeOn;
+
+      if (controlMode === 'gesture') {
+        stepHand(t, dt);
+
+        const tracking = hand.detected;
+        if(hudTracking !== tracking){
+          hudTracking = tracking;
+          hud.classList.toggle("tracking", tracking);
+          dot.classList.toggle("ok", tracking);
+          if(tracking) dot.classList.remove("bad");
+        }
+
+        const scanLabel = tracking ? "TRACKING ACTIVE" : (hand.ready ? "SCANNER IDLE" : "LOADING…");
+        if(hudScan !== scanLabel){
+          hudScan = scanLabel;
+          scanText.textContent = scanLabel;
+        }
+
+        const gestureLabel = tracking ? hand.gesture : "—";
+        if(hudGesture !== gestureLabel){
+          hudGesture = gestureLabel;
+          gestureTextEl.textContent = gestureLabel;
+        }
+
+        currentPos = { x: hand.wx, y: hand.wy };
+        currentBladeOn = tracking && hand.bladeOn;
+        updateBladeUi(currentBladeOn);
+      } else {
+        currentPos = { x: mouse.wx, y: mouse.wy };
+        currentBladeOn = mouse.bladeOn;
+
+        if(hudTracking !== false){
+          hudTracking = false;
+          hud.classList.remove("tracking");
+          dot.classList.remove("ok", "bad");
+        }
+        if(hudScan !== "MOUSE MODE"){
+          hudScan = "MOUSE MODE";
+          scanText.textContent = "MOUSE MODE";
+        }
+        if(hudGesture !== "MOUSE"){
+          hudGesture = "MOUSE";
+          gestureTextEl.textContent = "MOUSE";
+        }
+        updateBladeUi(currentBladeOn);
+      }
+
+      bladeCursor.position.set(currentPos.x, currentPos.y, 0.05);
+      bladeCursor.material.opacity = currentBladeOn ? 0.95 : 0.0;
+
+      let sliceSeg = null;
+      let sliceSpeed = 0;
+
+      if(currentBladeOn){
+        pushTrailPoint(currentPos.x, currentPos.y, t);
+
+        if(!prevHandWorldValid){
+          prevHandWorld.x = currentPos.x;
+          prevHandWorld.y = currentPos.y;
+          prevHandWorldValid = true;
+        } else {
+          const dx = currentPos.x - prevHandWorld.x;
+          const dy = currentPos.y - prevHandWorld.y;
+          const dist = Math.hypot(dx, dy);
+          sliceSpeed = dist / Math.max(dt, 1e-6);
+          sliceSeg = { p1:{x:prevHandWorld.x,y:prevHandWorld.y}, p2:{x:currentPos.x,y:currentPos.y}, dx,dy,dist };
+          prevHandWorld.x = currentPos.x;
+          prevHandWorld.y = currentPos.y;
+        }
+      } else {
+        if((t - lastTrailTime) > CFG.TRAIL_FALLBACK_HIDE_MS) clearTrail();
+        prevHandWorldValid = false;
+      }
+
+      const widthTarget = CFG.TRAIL_WIDTH_BASE + clamp(sliceSpeed, 0, 2.0) * CFG.TRAIL_WIDTH_SPEED;
+      trailWidth = lerp(trailWidth, widthTarget, 0.22);
+      trailMat.uniforms.uAlpha.value = currentBladeOn ? CFG.TRAIL_ALPHA_ON : CFG.TRAIL_ALPHA_OFF;
+      trailMat.uniforms.uTime.value = tSec;
+      trailMat.uniforms.uSpeed.value = sliceSpeed;
+
+      if(running){
+        spawnTimer += dt;
+        if(spawnTimer >= spawnInterval){
+          spawnTimer = 0;
+          spawnInterval = Math.max(CFG.SPAWN_MIN, spawnInterval * CFG.DIFFICULTY_RAMP);
+
+          const spawnCount = (Math.random() < CFG.MULTI_CHANCE) ? 2 : 1;
+          for(let i=0;i<spawnCount;i++){
+            const isBomb = (Math.random() < CFG.BOMB_CHANCE);
+            spawnFruit(isBomb);
+          }
+        }
+      }
+
+      // Update fruits
+      for(let i=fruits.length-1; i>=0; i--){
+        const f = fruits[i];
+
+        f.vy += CFG.GRAVITY * dt;
+        f.x += f.vx * dt;
+        f.y += f.vy * dt;
+
+        // 左右硬边界：撞到屏幕两侧就弹回来，保证一定能切到
+        const sideLimit = Math.max(0.1, aspect * CFG.SIDE_LIMIT - f.r);
+        if(f.x < -sideLimit || f.x > sideLimit){
+          f.x = clamp(f.x, -sideLimit, sideLimit);
+          f.vx *= -0.6;
+        }
+
+        // ✅ HARD TOP CLAMP: never exceed top edge
+        const topLimit = CFG.WORLD_Y - f.r - CFG.TOP_MARGIN;
+        if(f.y > topLimit){
+          f.y = topLimit;
+          // nudge downward so it doesn't "stick" at the ceiling
+          if(f.vy > 0) f.vy = -Math.abs(f.vy) * CFG.TOP_BOUNCE;
+        }
+
+        f.rot += f.spin * dt;
+
+        f.sprite.position.x = f.x;
+        f.sprite.position.y = f.y;
+        f.sprite.material.rotation = f.rot;
+
+        if(running && sliceSeg && !f.sliced && sliceSpeed > CFG.SLICE_SPEED_MIN){
+          if(segCircle(sliceSeg.p1, sliceSeg.p2, {x:f.x,y:f.y}, f.r)){
+            f.sliced = true;
+
+            if(f.isBomb){
+              hitFlash();
+              playBombSound();
+              endGame("BOMB DETONATED");
+            } else {
+              root.remove(f.sprite);
+
+              const dirLen = Math.max(1e-6, sliceSeg.dist);
+              const dir = { dx: sliceSeg.dx/dirLen, dy: sliceSeg.dy/dirLen };
+              spawnHalves(f, dir);
+              spawnSparks(f.x, f.y, fruitColor(f.type));
+              createShockwave(f.x, f.y);
+
+              score += 10 * combo;
+              combo = Math.min(12, combo + 1);
+              bestCombo = Math.max(bestCombo, combo);
+
+              scoreText.textContent = String(score);
+              comboTextEl.textContent = "x" + String(combo);
+
+              hitFlash();
+              playSliceSound(combo);
+              triggerShake(combo);
+            }
+
+            fruits.splice(i,1);
+            f.sprite.material.map = null;
+            f.sprite.material.dispose?.();
+          }
+        }
+
+        if(f.y < CFG.OUT_KILL_Y){
+          root.remove(f.sprite);
+          fruits.splice(i,1);
+          f.sprite.material.map = null;
+          f.sprite.material.dispose?.();
+
+          if(running && f.missable && !f.sliced){
+            misses++;
+            missTextEl.textContent = `${misses}/${MISS_MAX}`;
+            combo = 1;
+            comboTextEl.textContent = "x1";
+            if(misses >= MISS_MAX) endGame("TOO MANY MISSES");
+            playMissSound();
+          }
+        }
+      }
+
+      // halves
+      for(let i=halves.length-1; i>=0; i--){
+        const h = halves[i];
+        h.vy += CFG.GRAVITY * dt;
+        h.x += h.vx * dt;
+        h.y += h.vy * dt;
+        h.rot += h.spin * dt;
+        h.life -= dt;
+
+        const topLimit = CFG.WORLD_Y - (0.10) - CFG.TOP_MARGIN;
+        if(h.y > topLimit && h.vy > 0) h.vy = -Math.abs(h.vy) * 0.10;
+
+        h.sprite.position.x = h.x;
+        h.sprite.position.y = h.y;
+        h.sprite.material.rotation = h.rot;
+        h.sprite.material.opacity = clamp(h.life/1.2, 0, 1);
+
+        if(h.life <= 0 || h.y < CFG.OUT_KILL_Y - 0.3){
+          root.remove(h.sprite);
+          halves.splice(i,1);
+          h.sprite.material.map = null;
+          h.sprite.material.dispose?.();
+        }
+      }
+
+      // sparks
+      for(let i=sparks.length-1; i>=0; i--){
+        const s = sparks[i];
+        s.vy += (CFG.GRAVITY * 0.55) * dt;
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        s.life -= dt;
+
+        const a = clamp(s.life / CFG.SPARK_LIFE, 0, 1);
+        s.sprite.position.x = s.x;
+        s.sprite.position.y = s.y;
+        s.sprite.material.opacity = a * 0.90;
+
+        const sc = 0.12 * (0.55 + a*0.75);
+        s.sprite.scale.set(sc, sc, 1);
+
+        if(s.life <= 0){
+          sparksGroup.remove(s.sprite);
+          sparks.splice(i,1);
+          s.sprite.material.map = null;
+          s.sprite.material.dispose?.();
+        }
+      }
+
+      updateStars(dt, tSec);
+      
+      if (shakeTime > 0) {
+        shakeTime -= dt;
+        const decay = Math.max(0, shakeTime / 0.6);
+        const currentIntensity = shakeIntensity * decay;
+        
+        const shakeX = (Math.random() * 2 - 1) * currentIntensity;
+        const shakeY = (Math.random() * 2 - 1) * currentIntensity;
+        
+        camera.position.x = shakeX;
+        camera.position.y = shakeY;
+        
+        if (shakeTime <= 0) {
+          shakeIntensity = 0;
+          camera.position.set(0, 0, 10);
+        }
+      } else {
+        camera.position.set(0, 0, 10);
+      }
+      
+      renderer.render(scene, camera);
+
+      fpsFrames++;
+      const n = performance.now();
+      if(n - fpsLast > 500){
+        const fps = (fpsFrames * 1000) / (n - fpsLast);
+        fpsText.textContent = `${fps.toFixed(0)} fps`;
+        fpsFrames = 0;
+        fpsLast = n;
+      }
+    }
+
+    function animate(){
+      requestAnimationFrame(animate);
+      const t = performance.now();
+      const dt = Math.min(0.033, (t - lastTime) / 1000);
+      lastTime = t;
+      if(started) step(dt);
+    }
+
+    // ============================================================
+    // Mode selection
+    // ============================================================
+    function selectMode(mode) {
+      controlMode = mode;
+      startBtn.disabled = false;
+      
+      gestureModeBtn.style.borderColor = mode === 'gesture' ? 'rgba(110,255,220,.5)' : 'rgba(180,240,255,.18)';
+      gestureModeBtn.style.background = mode === 'gesture' ? 'rgba(110,255,220,.15)' : 'rgba(0,0,0,.3)';
+      
+      mouseModeBtn.style.borderColor = mode === 'mouse' ? 'rgba(110,255,220,.5)' : 'rgba(180,240,255,.18)';
+      mouseModeBtn.style.background = mode === 'mouse' ? 'rgba(110,255,220,.15)' : 'rgba(0,0,0,.3)';
+      
+      if (mode === 'gesture') {
+        modeDesc.textContent = '手势控制：食指指尖 = 刀尖 | 握拳 = 刀关';
+        startBtn.textContent = 'START · ENABLE CAMERA';
+      } else {
+        modeDesc.textContent = '手指控制：单指按住屏幕滑动来切奶龙';
+        startBtn.textContent = 'START';
+      }
+    }
+
+    // ============================================================
+    // Mouse event handlers
+    // ============================================================
+    function updateMousePos(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = (clientX - rect.left) / rect.width;
+      mouse.y = (clientY - rect.top) / rect.height;
+      const w = screenToWorld(mouse.x, mouse.y);
+      mouse.wx = w.x;
+      mouse.wy = w.y;
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (controlMode !== 'mouse') return;
+      mouse.bladeOn = true;
+      updateMousePos(e.clientX, e.clientY);
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (controlMode !== 'mouse') return;
+      updateMousePos(e.clientX, e.clientY);
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      if (controlMode !== 'mouse') return;
+      mouse.bladeOn = false;
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      if (controlMode !== 'mouse') return;
+      mouse.bladeOn = false;
+    });
+
+    // Touch events for mobile
+    canvas.addEventListener('touchstart', (e) => {
+      if (controlMode !== 'mouse') return;
+      e.preventDefault();
+      mouse.bladeOn = true;
+      const touch = e.touches[0];
+      if(touch) updateMousePos(touch.clientX, touch.clientY);
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (controlMode !== 'mouse') return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      if(touch) updateMousePos(touch.clientX, touch.clientY);
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+      if (controlMode !== 'mouse') return;
+      // 还有手指在屏幕上就继续切，全部抬起才收刀
+      if (e.touches && e.touches.length > 0){
+        const touch = e.touches[0];
+        if(touch) updateMousePos(touch.clientX, touch.clientY);
+        return;
+      }
+      mouse.bladeOn = false;
+    }, { passive: false });
+
+    canvas.addEventListener('touchcancel', () => {
+      if (controlMode !== 'mouse') return;
+      mouse.bladeOn = false;
+    });
+
+    // ============================================================
+    // Start / Restart
+    // ============================================================
+    async function start(){
+      try{
+        // 在点击事件栈里解锁音频：手势模式要 await 相机，之后才初始化会被浏览器挂起
+        initAudio();
+        startBgm();
+        banner.style.display = "none";
+        startBtn.disabled = true;
+        startBtn.textContent = "LOADING…";
+
+        if (controlMode === 'gesture') {
+          await initMediaPipeAndCamera();
+          camWrap.style.display = 'block';
+        } else {
+          camWrap.style.display = 'none';
+        }
+
+        overlay.style.display = "none";
+        started = true;
+        resetGame();
+        homeBtn.classList.add("show");
+        playStartSound();
+
+        dot.classList.remove("bad");
+        dot.classList.remove("ok");
+        scanText.textContent = controlMode === 'gesture' ? "SCANNER IDLE" : "MOUSE MODE";
+        hudScan = null;
+      } catch (e){
+        console.error(e);
+        stopBgm();
+        startBtn.disabled = false;
+        startBtn.textContent = "START · ENABLE CAMERA";
+        dot.classList.remove("ok");
+        dot.classList.add("bad");
+        scanText.textContent = "CAMERA ERROR";
+
+        let msg = String(e);
+        if (e.name === 'NotReadableError') {
+          msg = "相机被占用。请关闭其他使用相机的程序（如 Zoom, Teams, 腾讯会议, 或其他浏览器标签页）后重试。";
+        } else if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+           msg = "相机权限被拒绝。请在浏览器地址栏点击锁图标，允许访问相机。";
+        } else if (e.name === 'NotFoundError') {
+           msg = "未找到相机设备。请检查设备连接。";
+        }
+
+        bannerMsg(`<strong>启动失败：</strong>${msg}<br/>请确保设备未被占用，并已授予权限，或选择鼠标模式。`);
+      }
+    }
+
+    // 回到模式选择：结束当前对局，停掉相机，保留上次选中的模式
+    async function goHome(){
+      if(!started && overlay.style.display !== "none") return;
+
+      started = false;
+      running = false;
+      stopBgm();
+      stopOverSound();
+
+      overlay.style.display = "grid";
+      gameOver.style.display = "none";
+      flash.classList.remove("on");
+      homeBtn.classList.remove("show");
+      camWrap.style.display = "none";
+
+      hudTracking = null;
+      hudScan = null;
+      hudGesture = null;
+      hudBlade = null;
+
+      if(controlMode){
+        selectMode(controlMode);
+      } else {
+        modeDesc.textContent = '请选择一种切奶龙方式';
+        startBtn.textContent = 'START';
+        startBtn.disabled = true;
+      }
+
+      // 手势模式：释放相机并停掉识别循环，避免在选择界面时摄像头一直亮着
+      if(controlMode === 'gesture'){
+        clearTimeout(detectTimer);
+        detectTimer = 0;
+        detectCount = 0;
+
+        const stream = camEl.srcObject;
+        if(stream){
+          stream.getTracks().forEach(tk => tk.stop());
+          camEl.srcObject = null;
+        }
+
+        const lm = handLandmarker;
+        handLandmarker = null;
+        if(lm){
+          try { await lm.close(); } catch(e){}
+        }
+      }
+
+      hand.ready = false;
+      hand.detected = false;
+      hand.gesture = "NONE";
+      hand.bladeOn = false;
+      hand.fx = 0.5; hand.fy = 0.5;
+      hand.fxT = 0.5; hand.fyT = 0.5;
+      hand.vx = 0; hand.vy = 0;
+      hand.lastDetectT = 0;
+      hand.lastSeen = 0;
+
+      clearTrail();
+      prevHandWorldValid = false;
+    }
+
+    gestureModeBtn.addEventListener("click", () => selectMode('gesture'));
+    mouseModeBtn.addEventListener("click", () => selectMode('mouse'));
+    startBtn.addEventListener("click", start);
+    homeBtn.addEventListener("click", goHome);
+    restartBtn.addEventListener("click", ()=>{
+      initAudio();
+      stopOverSound();
+      resetGame();
+      playStartSound();
+      startBgm();
+    });
+
+    // ============================================================
+    // Boot
+    // ============================================================
+    (async function boot(){
+      try{
+        await loadCharacters();
+      } catch(e){
+        console.error(e);
+        bannerMsg(`<strong>角色素材加载失败：</strong>${e.message}<br/>请确认 libs/characters 目录完整后刷新页面。`);
+      }
+      initThree();
+      animate();
+    })();
+  </script>
+</body>
+</html>
