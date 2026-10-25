@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Fruitwarp Ninja — Hand Gesture Slice</title>
+  <title>切奶龙司凤版</title>
   <style>
     :root{
       --bg:#000;
@@ -383,8 +383,8 @@
 
     <div id="overlay">
       <div id="card">
-        <h1 style="background: linear-gradient(45deg, #6effff, #ff6eff, #6effff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 20px rgba(110,255,255,0.5);">Fruitwarp Ninja · 切水果</h1>
-        <p style="font-size:15px; color: rgba(255,255,255,0.9); text-shadow: 0 0 10px rgba(110,255,255,0.3);">选择你的切水果方式，避免切到炸弹。</p>
+        <h1 style="background: linear-gradient(45deg, #6effff, #ff6eff, #6effff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 20px rgba(110,255,255,0.5);">切奶龙司凤版</h1>
+        <p style="font-size:15px; color: rgba(255,255,255,0.9); text-shadow: 0 0 10px rgba(110,255,255,0.3);">选择你的切奶龙方式，躲开炸弹。</p>
         <div style="display: flex; gap: 12px; margin: 20px 0;">
           <button id="gestureModeBtn" style="flex:1; padding:16px; border-radius:16px; cursor:pointer; border:2px solid rgba(110,255,255,.3); background: linear-gradient(45deg, rgba(110,255,255,.1), rgba(255,110,255,.1)); color: white; font-size:15px; font-weight:600; transition: all .3s; box-shadow: 0 0 15px rgba(110,255,255,0.2);">
             ✋ 手势控制
@@ -393,7 +393,7 @@
             🖱️ 鼠标滑动
           </button>
         </div>
-        <p id="modeDesc" style="font-size:14px; color: rgba(180,240,255,.9); margin:12px 0; text-shadow: 0 0 8px rgba(110,255,255,0.3);">请选择一种切水果方式</p>
+        <p id="modeDesc" style="font-size:14px; color: rgba(180,240,255,.9); margin:12px 0; text-shadow: 0 0 8px rgba(110,255,255,0.3);">请选择一种切奶龙方式</p>
         <div class="row">
           <button id="startBtn" disabled style="padding:14px 24px; border-radius:14px; border:2px solid rgba(110,255,255,.5); background: linear-gradient(45deg, rgba(110,255,255,.2), rgba(255,110,255,.2)); color: white; font-size:16px; font-weight:700; transition: all .3s; box-shadow: 0 0 20px rgba(110,255,255,0.3);">START</button>
           <div id="note" style="font-size:12px; color: rgba(180,240,255,.8); text-shadow: 0 0 5px rgba(110,255,255,0.2);">相机模式通常需要 <code style="background: rgba(110,255,255,.2); border:1px solid rgba(110,255,255,.3); padding:2px 8px; border-radius:6px;">https</code> 或 <code style="background: rgba(110,255,255,.2); border:1px solid rgba(110,255,255,.3); padding:2px 8px; border-radius:6px;">http://localhost</code> 才能授权。</div>
@@ -2301,7 +2301,7 @@
         modeDesc.textContent = '手势控制：食指指尖 = 刀尖 | 握拳 = 刀关';
         startBtn.textContent = 'START · ENABLE CAMERA';
       } else {
-        modeDesc.textContent = '鼠标控制：按住鼠标左键并滑动来切水果';
+        modeDesc.textContent = '鼠标控制：按住鼠标左键并滑动来切奶龙';
         startBtn.textContent = 'START';
       }
     }
@@ -2434,7 +2434,7 @@
       if(controlMode){
         selectMode(controlMode);
       } else {
-        modeDesc.textContent = '请选择一种切水果方式';
+        modeDesc.textContent = '请选择一种切奶龙方式';
         startBtn.textContent = 'START';
         startBtn.disabled = true;
       }
